@@ -1,7 +1,8 @@
 import os
-import requests
+import requests    # used in the function more_info() below to get infofrom 3rd party APIs
+import json        # used in function api() below to output json string
 
-from flask import Flask, session, render_template, request
+from flask import Flask, session, render_template, request, abort
 from flask_session import Session
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
@@ -16,25 +17,21 @@ if not os.getenv("DATABASE_URL"):
 app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
-login_id = 0
 # Set up database
 engine = create_engine(os.getenv("DATABASE_URL"))
 db = scoped_session(sessionmaker(bind=engine))
 
-
 @app.route("/",methods=['GET', 'POST'])
-def index():
-    global login_id
+def index():                              # login screen
+    login_id=session.get('login_id',0)
     if login_id > 0:
-        inp ={ "isbn":"","title":"","author":""}
-        return render_template("search.html",inp=inp)    
+        return search()
     if request.method == "POST":
         log = request.form.get('login')
         pas = request.form.get('pass')
         res = db.execute("SELECT id FROM users WHERE login=:l AND pass=:p",{"l":log,"p":pas}).fetchone()
         if res:
-            login_id=res['id']
-            inp ={ "isbn":"","title":"","author":""}
+            session['login_id']=res['id']
             return search()
         else:
             return render_template("login.html",msg="Login fail. Try again")         
@@ -42,6 +39,7 @@ def index():
 
 @app.route("/search",methods=['GET'])
 def search():
+    login_id=session.get('login_id',0)
     if login_id==0: return render_template("login.html")
     res = []
     sql = []
@@ -71,28 +69,31 @@ def search():
 
 @app.route("/del_review/<isbn>") 
 def del_review(isbn):
-    global login_id
+    login_id=session.get('login_id',0)
     if login_id==0: return render_template("login.html")
     db.execute("delete from review where isbn=:i and user_id=:u",{"i":isbn,"u":login_id}) 
     db.commit()
     return book(isbn)
+
 @app.route("/api/<isbn>") 
 def api(isbn):
     book = db.execute("SELECT title,author,year FROM books WHERE isbn=:i",{"i":isbn}).fetchone()
     if book:
-        r = '{"title":"'+book['title']+'","author":"'+book['author']+'","year":'+str(book['year'])+'","isbn":"'+isbn+'","review_count":'
+        data = {
+            "title":book['title'], "author":book['author'], "year": book['year'], 
+            "isbn": isbn, "review_count":0, "average_score":0  }
         avg = db.execute("SELECT count(*),to_char(avg(rating),'FM9.9') from review where isbn=:i",{"i":isbn}).fetchone()
         if avg[0]: 
-            r = r+str(avg[0])+',"average_score":'+str(avg[1])+'}'
-        else:
-            r = r+'0,"average_score":0}'
+            data["review_count"]=avg[0]
+            data["average_score"]=avg[1]
+        r = json.dumps(data)
     else:
-        r='404 error'
+        abort(404) # true HTTP 404 - file not found return using flask abort functionality
     return r
 
 @app.route("/book/<isbn>", methods=['GET', 'POST']) 
 def book(isbn):
-    global login_id
+    login_id=session.get('login_id',0)
     if login_id==0: return render_template("login.html")
     rev=''
     add_review = True
@@ -125,8 +126,7 @@ def book(isbn):
 
 @app.route("/logout")
 def logout():
-    global login_id
-    login_id=0
+    session['login_id']=0
     return render_template("login.html",msg="Logout Successfully") 
 
 @app.route("/reg" , methods=['GET', 'POST'])
@@ -157,19 +157,19 @@ def more_info(isbn):
     try:
         d = r.json()
         v = d['items'][0]['volumeInfo']
-        ret = ret + "<label class='col-2'>GoogleAPI:</label><div class='col-8'>page_count: "+str(v['pageCount']) + ", ratings_count: "  
-        ret = ret + str(v['ratingsCount']) + ", average_rating: " + str(v['averageRating'])+"<br>"
-        ret = ret + "Description: " + v['description'] + "</div><div class='col-2'><img src='" + v['imageLinks']['thumbnail']+"'></div></div>"
+        ret += "<label class='col-2'>GoogleAPI:</label><div class='col-8'>page_count: "+str(v['pageCount']) + ", ratings_count: "  
+        ret += str(v['ratingsCount']) + ", average_rating: " + str(v['averageRating'])+"<br>"
+        ret += "Description: " + v['description'] + "</div><div class='col-2'><img src='" + v['imageLinks']['thumbnail']+"'></div></div>"
     except:
-        ret = '<p>API call to googleapis.com/books for isbn '+isbn+' fail: '+r.text+ "</p></div>"
-    ret = ret + '<div class="row">'
+        ret += '<p>Call to googleAPI for '+isbn+' fail: '+r.text+ "</p></div>"
+    ret += '<div class="row">'
     url = 'https://www.goodreads.com/book/review_counts.json?key=zGIQgZbn6KDXzWbp1pY5sg&isbns='+isbn
     r = requests.get(url=url)
     try:
         d = r.json()
         v = d['books'][0]
-        ret = ret + "<label class='col-2'><a target=out href='http://www.goodreads.com/book/isbn/"+isbn+"'>Goodreads stats</a>:</label> " 
-        ret = ret + "<div class='col-10'>ratings_count: "+str(v['ratings_count']) + ", average_rating: "+v['average_rating'] + "</div></div>"
+        ret += "<label class='col-2'><a target=out href='http://www.goodreads.com/book/isbn/"+isbn+"'>Goodreads stats</a>:</label> " 
+        ret += "<div class='col-10'>ratings_count: "+str(v['ratings_count']) + ", average_rating: "+v['average_rating'] + "</div></div>"
     except:
         ret = ret + '<p>API call to goodreads for isbn '+isbn+' fail: '+r.text + "</p></div>"
     return ret
