@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+
+{% block topnav %}
+    <h2>Search
+        <a class="badge btn btn-outline-primary" href="{{ url_for('logout') }}">logout <i class="fas fa-sign-out-alt"></i></a>
+    </h2>
+    
+{% endblock %}
+
+{% block body %}
+<form class="col-lg-10 mx-auto" style='padding:0 0 4px 0; border-bottom:2px solid #888' action="{{ url_for('search') }}">
+    <div class="gr">
+        <input class="form-control" type="text" name="isbn" value='{{inp.isbn}}' placeholder="isbn">
+        <input class="form-control" type="text" name="title" value='{{inp.title}}' placeholder="Title">
+        <input class="form-control" type="text" name="author" value='{{inp.author}}' placeholder="Author">
+        <button type="submit" class="btn btn-primary">Filter</button>
+    </div>
+</form>
+{% if(res) %}
+    <table class="table col-lg-10 mx-auto">
+        <thead><tr><th>ISBN</th><th>Title</th><th>Author</th><th>Year</th></tr></thead>
+        <tbody>
+        {% for x in res %}
+            <tr><td><a href='/book/{{x[0]}}'>{{x[0]}}</a></td><td>{{x[1]}}</td><td>{{x[2]}}</td><td>{{x[3]}}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% if(res|length==100) %}
+    <small>NOTE: result are limited to first 100 matches</small>
+    {% endif %}
+{% else %}
+<h2>No Books Found</h2>
+{% endif %}
+
+
+{% endblock %}

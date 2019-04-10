@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+
+{% block topnav %}
+    <h2>Member's Login</h2>
+{% endblock %}
+
+{% block body %}
+<div class="container">
+    {% if(msg) %}
+        <div class="alert alert-primary" role="alert">{{ msg }}</div>
+    {% endif %}
+    <div class="row">
+        <form class="col-sm-9 col-md-7 col-lg-5 mx-auto" action="{{ url_for('index') }}" method="post">
+            <input class="form-control" type="text" name="login" placeholder="Login"><br>
+            <input class="form-control" type="password" name="pass" placeholder="Password"><br>
+            <button type="submit" class="btn btn-primary">Login</button>
+        </form>
+    </div>
+    <div class="row">
+            <div class="col-sm-9 col-md-7 col-lg-5 mx-auto">
+                Not a member? <a href='{{ url_for('register') }}'>Register as a new member</a>.
+            </div>
+    </div>
+</div>    
+{% endblock %}
